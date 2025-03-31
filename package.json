@@ -1,8 +1,8 @@
 {
-    "name": "codecat",
-    "displayName": "CodeCat",
+    "name": "codecat4ai",
+    "displayName": "CodeCat4ai",
     "description": "Concatenate selected files and copy to clipboard",
-    "version": "1.0.0",
+    "version": "1.0.5",
     "publisher": "Unclecode",
     "repository": "https://github.com/unclecode/codecat-vscode",
     "engines": {
@@ -13,25 +13,127 @@
     ],
     "main": "./out/extension.js",
     "activationEvents": [
-        "onCommand:codecat.concatFiles"
+        "onCommand:codecat.concatFiles",
+        "onCommand:codecat.skimFiles",
+        "onCommand:codecat.concatFilesAndSave",
+        "onCommand:codecat.skimFilesAndSave",
+        "onCommand:codecat.reviewCode",
+        "onCommand:codecat.createCustomCommand",
+        "onCommand:codecat.createSampleCommand",
+        "onCommand:codecat.refreshCustomCommands",
+        "onCommand:codecat.showCustomCommands"
     ],
     "contributes": {
+        "configuration": {
+            "title": "CodeCat",
+            "properties": {
+                "codecat.anthropicApiKey": {
+                    "type": "string",
+                    "default": "",
+                    "description": "API key for Anthropic Claude"
+                }
+            }
+        },
         "commands": [
             {
                 "command": "codecat.concatFiles",
-                "title": "Concat",
+                "title": "Concat to Clipboard",
+                "category": "CodeCat"
+            },
+            {
+                "command": "codecat.concatFilesAndSave",
+                "title": "Concat to Editor",
+                "category": "CodeCat"
+            },
+            {
+                "command": "codecat.skimFiles",
+                "title": "Skim to Clipboard",
+                "category": "CodeCat"
+            },
+            {
+                "command": "codecat.skimFilesAndSave",
+                "title": "Skim to Editor",
+                "category": "CodeCat"
+            },
+            {
+                "command": "codecat.reviewCode",
+                "title": "Review Code",
+                "category": "CodeCat"
+            },
+            {
+                "command": "codecat.createCustomCommand",
+                "title": "Create Custom Command",
+                "category": "CodeCat"
+            },
+            {
+                "command": "codecat.createSampleCommand",
+                "title": "Create Sample Command",
+                "category": "CodeCat"
+            },
+            {
+                "command": "codecat.refreshCustomCommands",
+                "title": "Refresh Custom Commands",
+                "category": "CodeCat"
+            },
+            {
+                "command": "codecat.showCustomCommands",
+                "title": "Run Custom Command",
                 "category": "CodeCat"
             }
         ],
         "menus": {
             "explorer/context": [
                 {
-                    "command": "codecat.concatFiles",
+                    "submenu": "codecat.menu",
                     "group": "navigation",
-                    "when": "explorerResourceIsFolder == false"
+                    "when": "true"
+                }
+            ],
+            "codecat.menu": [
+                {
+                    "command": "codecat.concatFiles",
+                    "group": "1_concat"
+                },
+                {
+                    "command": "codecat.concatFilesAndSave",
+                    "group": "1_concat"
+                },
+                {
+                    "command": "codecat.skimFiles",
+                    "group": "2_skim"
+                },
+                {
+                    "command": "codecat.skimFilesAndSave",
+                    "group": "2_skim"
+                },
+                {
+                    "command": "codecat.reviewCode",
+                    "group": "3_review"
+                },
+                {
+                    "command": "codecat.showCustomCommands",
+                    "group": "4_custom"
+                },
+                {
+                    "command": "codecat.createCustomCommand",
+                    "group": "5_manage"
+                },
+                {
+                    "command": "codecat.createSampleCommand",
+                    "group": "5_manage"
+                },
+                {
+                    "command": "codecat.refreshCustomCommands",
+                    "group": "5_manage"
                 }
             ]
-        }
+        },
+        "submenus": [
+            {
+                "id": "codecat.menu",
+                "label": "CodeCat"
+            }
+        ]
     },
     "scripts": {
         "compile": "tsc -p ./",
@@ -42,6 +144,9 @@
         "package": "vsce package",
         "publish": "vsce publish"
     },
+    "dependencies": {
+        "@anthropic-ai/sdk": "^0.19.0"
+    },
     "devDependencies": {
         "@types/node": "^16.11.7",
         "@types/vscode": "^1.98.0",
@@ -50,5 +155,17 @@
         "eslint": "^8.13.0",
         "typescript": "^4.7.2",
         "vsce": "^2.15.0"
-    }
+    },
+    "icon": "images/icon.png",
+    "galleryBanner": {
+        "color": "#FFFFFF",
+        "theme": "light"
+    },
+    "badges": [
+        {
+            "url": "https://img.shields.io/badge/Version-1.0.5-blue",
+            "href": "https://marketplace.visualstudio.com/items?itemName=Unclecode.codecat4ai",
+            "description": "Version"
+        }
+    ]
 }
