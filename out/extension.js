@@ -28,6 +28,7 @@ const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const util_1 = require("util");
+const minimatch = __importStar(require("minimatch"));
 const review_1 = require("./review");
 const customCommands_1 = require("./customCommands");
 const LANGUAGE_CONFIGS = {
@@ -257,6 +258,128 @@ async function getAllFiles(dirPath) {
     return files;
 }
 /**
+ * Loads gitignore patterns from a directory and adds default system patterns
+ */
+async function loadGitignorePatterns(rootPath) {
+    // Default patterns to exclude common system folders and files
+    const defaultPatterns = [
+        '.git/**',
+        '.git/',
+        '.vscode/**',
+        '.vscode/',
+        '.hg/**',
+        '.hg/',
+        '.svn/**',
+        '.svn/',
+        '.DS_Store',
+        'Thumbs.db',
+        'desktop.ini',
+        '.idea/**',
+        '.idea/'
+    ];
+    // Load .gitignore patterns if they exist
+    const gitignorePath = path.join(rootPath, '.gitignore');
+    let gitignorePatterns = [];
+    try {
+        if (fs.existsSync(gitignorePath)) {
+            const content = await fs.promises.readFile(gitignorePath, 'utf8');
+            // Return all non-empty, non-comment lines
+            gitignorePatterns = content
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line && !line.startsWith('#'));
+        }
+    }
+    catch (error) {
+        // Ignore errors reading gitignore
+        console.log('Error reading .gitignore:', error);
+    }
+    // Combine default patterns with .gitignore patterns
+    return [...defaultPatterns, ...gitignorePatterns];
+}
+/**
+ * Generates a tree structure of a directory
+ */
+async function generateTreeStructure(dirPath, basePath, prefix = '', maxDepth = 10, currentDepth = 0, ignorePatterns = []) {
+    if (currentDepth >= maxDepth) {
+        return `${prefix}...\n`;
+    }
+    const readdir = (0, util_1.promisify)(fs.readdir);
+    const stat = (0, util_1.promisify)(fs.stat);
+    let result = '';
+    try {
+        const items = await readdir(dirPath);
+        // Create a function to check if a path should be ignored
+        const shouldIgnore = (itemPath) => {
+            const relativePath = path.relative(basePath, itemPath);
+            for (const pattern of ignorePatterns) {
+                // Handle directory-specific patterns (ending with /)
+                if (pattern.endsWith('/') && fs.statSync(itemPath).isDirectory()) {
+                    const dirPattern = pattern.slice(0, -1);
+                    if (minimatch.minimatch(relativePath, dirPattern) ||
+                        minimatch.minimatch(relativePath, `${dirPattern}/**`)) {
+                        return true;
+                    }
+                }
+                // Handle basic patterns
+                if (minimatch.minimatch(relativePath, pattern) ||
+                    minimatch.minimatch(relativePath, `${pattern}/**`)) {
+                    return true;
+                }
+                // Handle negation patterns (patterns that start with !)
+                if (pattern.startsWith('!') &&
+                    minimatch.minimatch(relativePath, pattern.substring(1))) {
+                    return false;
+                }
+            }
+            return false;
+        };
+        const filteredItems = items.filter(item => {
+            const itemPath = path.join(dirPath, item);
+            return !shouldIgnore(itemPath);
+        });
+        const sortedItems = filteredItems.sort((a, b) => {
+            // Directories first, then files
+            const aPath = path.join(dirPath, a);
+            const bPath = path.join(dirPath, b);
+            try {
+                const aIsDir = fs.statSync(aPath).isDirectory();
+                const bIsDir = fs.statSync(bPath).isDirectory();
+                if (aIsDir && !bIsDir)
+                    return -1;
+                if (!aIsDir && bIsDir)
+                    return 1;
+                return a.localeCompare(b);
+            }
+            catch (error) {
+                return 0;
+            }
+        });
+        for (let i = 0; i < sortedItems.length; i++) {
+            const item = sortedItems[i];
+            const itemPath = path.join(dirPath, item);
+            try {
+                const stats = await stat(itemPath);
+                const isLast = i === sortedItems.length - 1;
+                const itemPrefix = isLast ? '└── ' : '├── ';
+                const nextPrefix = isLast ? '    ' : '│   ';
+                result += `${prefix}${itemPrefix}${item}\n`;
+                if (stats.isDirectory()) {
+                    result += await generateTreeStructure(itemPath, basePath, prefix + nextPrefix, maxDepth, currentDepth + 1, ignorePatterns);
+                }
+            }
+            catch (error) {
+                // Skip files that can't be accessed
+                continue;
+            }
+        }
+    }
+    catch (error) {
+        result += `${prefix}Error reading directory: ${error instanceof Error ? error.message : String(error)}\n`;
+    }
+    return result;
+}
+/**
  * Process files for concatenation (regular or skim mode)
  */
 async function processFiles(filesToProcess, skimMode = false, asMarkdown = false) {
@@ -336,6 +459,51 @@ async function showInEditor(content, filename) {
     }
 }
 async function activate(context) {
+    // Tree structure command
+    let treeDisposable = vscode.commands.registerCommand('codecat.generateTree', async (uri, selectedUris) => {
+        // We only support tree generation from a single directory
+        let directoryPath = null;
+        if (uri) {
+            // Case 1: Single folder selected via Explorer context menu
+            try {
+                const stats = await fs.promises.stat(uri.fsPath);
+                if (stats.isDirectory()) {
+                    directoryPath = uri.fsPath;
+                }
+                else {
+                    // If a file is selected, use its parent directory
+                    directoryPath = path.dirname(uri.fsPath);
+                }
+            }
+            catch (error) {
+                vscode.window.showErrorMessage(`Failed to access path: ${error instanceof Error ? error.message : String(error)}`);
+                return;
+            }
+        }
+        else {
+            vscode.window.showErrorMessage('No directory selected for tree generation');
+            return;
+        }
+        try {
+            // Generate the tree structure
+            const basePath = directoryPath;
+            const folderName = path.basename(directoryPath);
+            // Load gitignore patterns if they exist
+            const gitignorePatterns = await loadGitignorePatterns(basePath);
+            // Start with the root folder name
+            let treeContent = `${folderName}\n`;
+            // Note that we're filtering system files and gitignore patterns
+            treeContent += `├── (system files and .gitignore patterns excluded)\n`;
+            // Generate tree with filtered patterns
+            treeContent += await generateTreeStructure(directoryPath, basePath, '', 10, 0, gitignorePatterns);
+            // Copy to clipboard
+            await vscode.env.clipboard.writeText(treeContent);
+            vscode.window.showInformationMessage(`Successfully generated tree structure to clipboard (system files excluded)`);
+        }
+        catch (error) {
+            vscode.window.showErrorMessage(`Failed to generate tree: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    });
     // Regular concat command
     let concatDisposable = vscode.commands.registerCommand('codecat.concatFiles', async (uri, selectedUris) => {
         // Determine which files to process
@@ -592,7 +760,7 @@ async function activate(context) {
             console.log('Could not set up file watcher:', err);
         }
     }
-    context.subscriptions.push(concatDisposable, skimDisposable, concatSaveDisposable, skimSaveDisposable, reviewDisposable, createCommandDisposable, createSampleDisposable, refreshCommandsDisposable);
+    context.subscriptions.push(treeDisposable, concatDisposable, skimDisposable, concatSaveDisposable, skimSaveDisposable, reviewDisposable, createCommandDisposable, createSampleDisposable, refreshCommandsDisposable);
     // Register custom commands from .codecat/commands directory
     let customCommandDisposables = await (0, customCommands_1.registerCustomCommands)(context);
     // Register a command to show available custom commands

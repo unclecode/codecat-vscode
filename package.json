@@ -2,7 +2,7 @@
     "name": "codecat4ai",
     "displayName": "CodeCat4ai",
     "description": "Concatenate selected files and copy to clipboard",
-    "version": "1.0.5",
+    "version": "1.0.7",
     "publisher": "Unclecode",
     "repository": "https://github.com/unclecode/codecat-vscode",
     "engines": {
@@ -21,7 +21,8 @@
         "onCommand:codecat.createCustomCommand",
         "onCommand:codecat.createSampleCommand",
         "onCommand:codecat.refreshCustomCommands",
-        "onCommand:codecat.showCustomCommands"
+        "onCommand:codecat.showCustomCommands",
+        "onCommand:codecat.generateTree"
     ],
     "contributes": {
         "configuration": {
@@ -35,6 +36,11 @@
             }
         },
         "commands": [
+            {
+                "command": "codecat.generateTree",
+                "title": "Generate Tree",
+                "category": "CodeCat"
+            },
             {
                 "command": "codecat.concatFiles",
                 "title": "Concat to Clipboard",
@@ -91,6 +97,10 @@
             ],
             "codecat.menu": [
                 {
+                    "command": "codecat.generateTree",
+                    "group": "0_tree"
+                },
+                {
                     "command": "codecat.concatFiles",
                     "group": "1_concat"
                 },
@@ -145,9 +155,11 @@
         "publish": "vsce publish"
     },
     "dependencies": {
-        "@anthropic-ai/sdk": "^0.19.0"
+        "@anthropic-ai/sdk": "^0.19.0",
+        "minimatch": "^9.0.3"
     },
     "devDependencies": {
+        "@types/minimatch": "^5.1.2",
         "@types/node": "^16.11.7",
         "@types/vscode": "^1.98.0",
         "@typescript-eslint/eslint-plugin": "^5.30.0",
@@ -163,7 +175,7 @@
     },
     "badges": [
         {
-            "url": "https://img.shields.io/badge/Version-1.0.5-blue",
+            "url": "https://img.shields.io/badge/Version-1.0.7-blue",
             "href": "https://marketplace.visualstudio.com/items?itemName=Unclecode.codecat4ai",
             "description": "Version"
         }
