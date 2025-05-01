@@ -644,21 +644,46 @@ export async function activate(context: vscode.ExtensionContext) {
         }
 
         try {
-            // Process files in regular mode with markdown format
-            const combinedContent = await processFiles(filesToProcess, false, true);
-            
-            // Unused now but kept for consistency
-            const defaultFilename = 'code-concatenation.md';
-            
-            // Show in editor
-            const editor = await showInEditor(combinedContent, 'context');
-            if (editor) {
-                // Count non-empty lines for the message
-                const fileCount = combinedContent.split('## File:').length - 1;
-                vscode.window.showInformationMessage(
-                    `Successfully concatenated ${fileCount} file${fileCount > 1 ? 's' : ''} to markdown`
-                );
+            const workspaceRoot = vscode.workspace.workspaceFolders?.[0];
+            if (!workspaceRoot) {
+                vscode.window.showErrorMessage('No workspace folder open');
+                return;
             }
+
+            // 1 / ensure .codecat exists
+            const codecatDir = path.join(workspaceRoot.uri.fsPath, '.codecat');
+            try { await fs.promises.access(codecatDir); }
+            catch { await fs.promises.mkdir(codecatDir, { recursive: true }); }
+
+            // 2 / build combined markdown
+            const combinedContent = await processFiles(filesToProcess, false, true);
+
+            // 3 / pick next index
+            const existing = await fs.promises.readdir(codecatDir);
+            const nextIdx = Math.max(
+                0,
+                ...existing
+                    .map(f => /^context-(\d+)\.md$/.exec(f))
+                    .filter(Boolean)
+                    .map(m => Number(m![1]))
+            ) + 1;
+            const targetFile = `context-${nextIdx}.md`;
+            const targetPath = path.join(codecatDir, targetFile);
+
+            // 4 / save file
+            await fs.promises.writeFile(targetPath, combinedContent, 'utf8');
+
+            // 5 / copy **file path** to clipboard (API only supports text)
+            await vscode.env.clipboard.writeText(targetPath);
+
+            // 6 / open it for the user, purely convenience
+            const doc = await vscode.workspace.openTextDocument(targetPath);
+            await vscode.window.showTextDocument(doc);
+
+            const fileCount = combinedContent.split('## File:').length - 1;
+            vscode.window.showInformationMessage(
+                `Saved → ${targetFile} (${fileCount} file${fileCount !== 1 ? 's' : ''}), path copied to clipboard`
+            );
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to concatenate files: ${error instanceof Error ? error.message : String(error)}`);
         }

@@ -2,7 +2,7 @@
     "name": "codecat4ai",
     "displayName": "CodeCat4ai",
     "description": "Concatenate selected files and copy to clipboard",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "publisher": "Unclecode",
     "repository": "https://github.com/unclecode/codecat-vscode",
     "engines": {
